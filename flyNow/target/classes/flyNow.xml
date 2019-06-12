@@ -32,7 +32,7 @@ http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mul
     </http:request-config>
     <flow name="flyNow-main">
         <http:listener config-ref="flyNow-httpListenerConfig" path="/api/*" doc:name="HTTP" />
-        <logger level="INFO" doc:name="LoggerInputMainProcess" message="Main input:#[message.payloadAs(String)]"/>
+        <logger level="INFO" doc:name="LoggerInputMainProcess" message="Main input: #[message.payloadAs(String)]"/>
         <http:basic-security-filter realm="mule-realm" />
         <apikit:router config-ref="flyNow-config" doc:name="APIkit Router" />
         <logger level="INFO" doc:name="LoggerOutputMainProcess" message="Main output: #[message.payloadAs(String)]"/>
