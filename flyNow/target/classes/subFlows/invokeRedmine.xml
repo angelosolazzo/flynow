@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd">
+    <http:request-config name="HTTP_Request_Redmine" protocol="HTTPS" host="helena.it.nttdata-emea.com" port="443" doc:name="HTTP Request Configuration" >
+        <http:proxy host="helena.it.nttdata-emea.com" port="443" username="drone" password="password"/>
+    </http:request-config>
+    <http:request-config name="HTTP_Request_Configuration_Redmine"  host="helena.it.nttdata-emea.com" port="443" doc:name="HTTP Request Configuration" protocol="HTTPS">
+        <http:basic-authentication username="drone" password="password"/>
+    </http:request-config>
+    <flow name="invokeRedmineFlow">
+        <logger message="Start invokeRedmine #[payload]" level="INFO" doc:name="StartLogger"/>
+        <scripting:transformer encoding="UTF-8" mimeType="application/json" doc:name="Groovy">
+            <scripting:script engine="Groovy"><![CDATA[import groovy.json.JsonSlurper
+import groovy.json.JsonOutput  
+
+class Request {
+    int project_id
+    String subject
+    String description
+    int priority_id
+    
+  }
+
+String jsonString = payload;
+JsonSlurper slurper = new JsonSlurper();
+Map parsedJson = slurper.parseText(jsonString);
+def input = parsedJson;
+String subjectRedmine= 'Altitudine ' + input.u_altitude + ' Longitudine ' + input.u_longitude + ' Latitudine ' + input.u_latitude
+def output = JsonOutput.toJson( new Request(project_id: 59,subject: input.u_short_description, description: subjectRedmine ,priority_id:3))
+output='{  "issue":' + output + '}' 
+       
+return output]]></scripting:script>
+        </scripting:transformer>
+
+        <http:request config-ref="HTTP_Request_Redmine" path="/redmine/projects/poc-flynow/issues.json" method="POST" doc:name="HTTP">
+        </http:request>
+
+        <logger message="End invokeRedmine #[message.payloadAs(String)]" level="INFO" doc:name="EndLogger"/>
+         <catch-exception-strategy doc:name="Catch Exception Strategy">
+            <expression-component doc:name="Expression"><![CDATA[flowVars.summaryMessage=exception.getSummaryMessage().toString();]]></expression-component>
+            <scripting:transformer doc:name="Groovy">
+                <scripting:script engine="Groovy"><![CDATA[import groovy.json.JsonSlurper
+import groovy.json.JsonOutput  
+
+class Result {
+    String esito
+    String exceptionMessage
+    
+}
+
+
+
+
+Result res = new Result("esito": "KO", "exceptionMessage": flowVars['summaryMessage'])
+
+
+def jsonBuilder = new groovy.json.JsonBuilder()
+
+jsonBuilder {
+   result(res.collect{[esito: res.esito, exceptionMessage: res.exceptionMessage]})
+}
+return jsonBuilder.toPrettyString()]]></scripting:script>
+            </scripting:transformer>
+            <set-payload value="#[payload]" doc:name="Set Payload" />
+            <logger message="Error post invokeRedmine #[payload]" level="ERROR" doc:name="Logger" />
+        </catch-exception-strategy>
+    </flow>
+</mule>

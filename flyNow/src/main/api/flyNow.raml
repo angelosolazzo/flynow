@@ -1,0 +1,136 @@
+#%RAML 1.0
+title: flyNow
+version: 1.0
+baseUri: http://mulesoft.com
+
+
+/sendRequest:
+  post:
+    description: Creazione ticket su service now
+    body:
+      application/json:
+            example: {
+                      "u_short_description": "Esempio di Request",
+                      "u_description": "descrizione della request dell’operatore",
+                      "u_altitude": "11",
+                      "u_latitude": "40.8518",
+                      "u_longitude": "10.2681",
+                      "u_category": "maintenance",
+                      "u_travel_plan": "FNTP000000001003",
+                      "u_travelplan_point": "FNTPP000000001001"
+                                
+                      }
+
+                    
+                    
+    responses:
+            200:
+               body:
+                  application/json:
+                    example: {
+                            "import_set": "ISET0010006",
+                            "staging_table": "x_nttdi_dfn_request_inbound",
+                            "result": [
+                              {
+                                "transform_map": "Request Inbound",
+                                "table": "x_nttdi_dfn_request",
+                                "display_name": "number",
+                                "display_value": "FNR0001018",
+                                "record_link": "https://nttdatademo2.service-now.com/api/now/table/x_nttdi_dfn_request/3e23c56737c07340aad843ba54990e28",
+                                "status": "inserted",
+                                "sys_id": "3e23c56737c07340aad843ba54990e28"
+                              }
+                            ]
+                          }
+
+/accelerometroRequest:
+  post:
+    description: Creazione ticket su service now
+    body:
+      application/json:
+            example: {
+                      "u_ball_id": "P0001",
+                      "u_acceleration": "55.764"}
+    responses:
+            200:
+               body:
+                  application/json:
+                    example: {
+                              "result": {
+                                "u_category": "1",
+                                "sys_id": "4ba5229937213300f77e036973990ea2",
+                                "u_number": "BSMPL00000000005",
+                                "u_ball_id": "P0001",
+                                "sys_updated_by": "admin",
+                                "sys_created_on": "2019-05-20 13:37:44",
+                                "u_acceleration": "55.764",
+                                "sys_mod_count": "0",
+                                "sys_updated_on": "2019-05-20 13:37:44",
+                                "sys_tags": "",
+                                "sys_created_by": "admin"
+                              }
+                            }
+                    
+                    
+  
+/planpoint_list:
+            
+                  
+    get:
+     queryParameters: 
+        Plan_ID:
+          type: string
+          description: The number of plan Id
+          example: FNTP000000001003
+          required: true
+          
+     responses:
+        200:
+          body:
+            application/json:
+              example: |   
+                {
+                  "result": [
+                    {
+                      "Number": "FNTPP000000001001",
+                      "Order": "1",
+                      "LocationLatitude": "45.6042",
+                      "LocationLongitude": "8.8364"
+                    },
+                    {
+                      "Number": "FNTPP000000001002",
+                      "Order": "2",
+                      "LocationLatitude": "45.8558",
+                      "LocationLongitude": "9.6867"
+                    }
+                  ]
+                }
+
+/travel_plan_list:
+            
+                  
+    get:
+    
+          
+     responses:
+        200:
+          body:
+            application/json:
+              example: |   
+                {
+                  "result": [
+                    {
+                      "Plan_id": "FNTPP000000001001",
+                      "Name": "FLIGHT PLAN 1"
+                    },
+                    {
+                     "Plan_id": "FNTPP000000001002",
+                     "Name": "FLIGHT PLAN 2"
+                    },
+                       {
+                     "Plan_id": "FNTPP000000001003",
+                     "Name": "FLIGHT PLAN 3"
+                    }
+                  ]
+                }                  
+  

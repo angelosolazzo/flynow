@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:mule-ss="http://www.mulesoft.org/schema/mule/spring-security" xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:ss="http://www.springframework.org/schema/security" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/spring-security http://www.mulesoft.org/schema/mule/spring-security/3.1/mule-spring-security.xsd
+http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security-3.0.xsd
+http://www.mulesoft.org/schema/mule/spring-security http://www.mulesoft.org/schema/mule/spring-security/current/mule-spring-security.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.1.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd">
+    <spring:beans>
+        <ss:authentication-manager alias="authenticationManager">
+            <ss:authentication-provider>
+                <ss:user-service id="userService">
+                    <ss:user name="app" password="flynow" authorities="ROLE_ADMIN" />
+                </ss:user-service>
+            </ss:authentication-provider>
+        </ss:authentication-manager>
+    </spring:beans>
+    <mule-ss:security-manager name="test-memory-provider" doc:name="Spring Security Provider">
+        <mule-ss:delegate-security-provider name="memory-provider" delegate-ref="authenticationManager" />
+    </mule-ss:security-manager>
+    <http:listener-config name="flyNow-httpListenerConfig" host="0.0.0.0" port="8081" doc:name="HTTP Listener Configuration" />
+    <apikit:config name="flyNow-config" raml="flyNow.raml" consoleEnabled="false" doc:name="Router" />
+    <http:request-config name="HTTP_Request_Configuration" protocol="HTTPS" host="nttdatademo2.service-now.com" port="443" doc:name="HTTP Request Configuration">
+        <http:ntlm-authentication username="fndroneuser" password="fndroneuser" />
+    </http:request-config>
+    <http:request-config name="HTTP_Request_Accelerometro" protocol="HTTPS" host="dev54786.service-now.com" port="443"  doc:name="HTTP Request Configuration">
+        <http:ntlm-authentication username="BSLABUser" password="BSLABUser"/>
+    </http:request-config>
+    <flow name="flyNow-main">
+        <http:listener config-ref="flyNow-httpListenerConfig" path="/api/*" doc:name="HTTP" />
+        <logger level="INFO" doc:name="LoggerInputMainProcess" message="Main input:#[message.payloadAs(String)]"/>
+        <http:basic-security-filter realm="mule-realm" />
+        <apikit:router config-ref="flyNow-config" doc:name="APIkit Router" />
+        <logger level="INFO" doc:name="LoggerOutputMainProcess" message="Main output: #[message.payloadAs(String)]"/>
+        <exception-strategy ref="flyNow-apiKitGlobalExceptionMapping" doc:name="Reference Exception Strategy" />
+    </flow>
+    <flow name="flyNow-console">
+        <http:listener config-ref="flyNow-httpListenerConfig" path="/console/*" doc:name="HTTP" />
+        <apikit:console config-ref="flyNow-config" doc:name="APIkit Console" />
+    </flow>
+    <flow name="post:/sendRequest:flyNow-config">
+        <logger message="start post sendRequest flow #[message.payloadAs(String)]" level="INFO" doc:name="LoggerStart" />
+        <flow-ref name="invokeRedmineFlow" doc:name="invokeRedmine"/>
+
+      
+        <http:request config-ref="HTTP_Request_Configuration" path="/api/now/import/x_nttdi_dfn_request_inbound" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json" />
+            </http:request-builder>
+        </http:request>
+        <set-payload value="#[payload]" doc:name="Set Payload" />
+        <logger message="end post sendRequest flow #[message.payloadAs(String)]" level="INFO" doc:name="EndLogger" />
+        <catch-exception-strategy doc:name="Catch Exception Strategy">
+            <expression-component doc:name="Expression"><![CDATA[flowVars.summaryMessage=exception.getSummaryMessage().toString();]]></expression-component>
+            <scripting:transformer doc:name="Groovy">
+                <scripting:script engine="Groovy"><![CDATA[import groovy.json.JsonSlurper
+import groovy.json.JsonOutput  
+
+class Result {
+    String esito
+    String exceptionMessage
+    
+}
+
+
+
+
+Result res = new Result("esito": "KO", "exceptionMessage": flowVars['summaryMessage'])
+
+
+def jsonBuilder = new groovy.json.JsonBuilder()
+
+jsonBuilder {
+   result(res.collect{[esito: res.esito, exceptionMessage: res.exceptionMessage]})
+}
+return jsonBuilder.toPrettyString()]]></scripting:script>
+            </scripting:transformer>
+            <set-payload value="#[payload]" doc:name="Set Payload" />
+            <logger message="Error post sendRequest service now: #[payload]" level="ERROR" doc:name="Logger" />
+        </catch-exception-strategy>
+    </flow>
+    <flow name="get:/planpoint_list:flyNow-config">
+        <logger message="start get planpoint flow #[message.payloadAs(String)]" level="INFO" doc:name="StartLogger" />
+       
+        <set-variable variableName="Plan_ID" value="#[message.inboundProperties.'http.query.params'.Plan_ID]" doc:name="SetPlan_id" />
+        <http:request config-ref="HTTP_Request_Configuration" path="/api/x_nttdi_dfn/travelplanutilities/planpoint_list" method="GET" doc:name="HTTP">
+            <http:request-builder>
+                <http:query-param paramName="Plan_ID" value="#[flowVars.Plan_ID]" />
+            </http:request-builder>
+        </http:request>
+        <byte-array-to-object-transformer doc:name="Byte Array to Object" />
+        <set-variable variableName="result" value="#[json:result[0]/Number]" doc:name="VariableResult" />
+        <choice doc:name="Choice">
+            <when expression="#[flowVars.result== empty]">
+                <set-payload value="#[{ &quot;result&quot;: [      ]}]" doc:name="Set Payload" />
+            </when>
+            <otherwise>
+                <scripting:transformer doc:name="Groovy">
+                    <scripting:script engine="Groovy"><![CDATA[import groovy.json.JsonSlurper
+import groovy.json.JsonOutput  
+
+class Result {
+    String Number
+    String Order
+    String LocationLatitude
+    String LocationLongitude
+}
+
+
+
+def List<Result> resultList = []
+
+String jsonString = payload;
+JsonSlurper slurper = new JsonSlurper();
+Map parsedJson = slurper.parseText(jsonString);
+def array1 = parsedJson.result;
+for(def member : array1) {
+    
+    Result res = new Result("Number": member.Number, "Order": member.Order, "LocationLatitude": member.LocationLatitude, "LocationLongitude": member.LocationLongitude)
+    resultList.add(res)
+   }
+
+
+def jsonBuilder = new groovy.json.JsonBuilder()
+
+jsonBuilder {
+   result(resultList.collect{[Number: it.Number, Order: it.Order, LocationLatitude: it.LocationLatitude,LocationLongitude: it.LocationLongitude]})
+}
+return jsonBuilder.toPrettyString()]]></scripting:script>
+                </scripting:transformer>
+                <json:object-to-json-transformer doc:name="Object to JSON" />
+                <set-payload value="#[payload]" doc:name="Set Payload" />
+            </otherwise>
+        </choice>
+        <logger message="end get planpoint flow #[message.payloadAs(String)]" level="INFO" doc:name="EndLogger" />
+        <catch-exception-strategy doc:name="Catch Exception Strategy">
+            <expression-component doc:name="Expression"><![CDATA[flowVars.summaryMessage=exception.getSummaryMessage().toString();]]></expression-component>
+            <scripting:transformer doc:name="Groovy">
+                <scripting:script engine="Groovy"><![CDATA[import groovy.json.JsonSlurper
+import groovy.json.JsonOutput  
+
+class Result {
+    String esito
+    String exceptionMessage
+    
+}
+
+
+
+
+Result res = new Result("esito": "KO", "exceptionMessage": flowVars['summaryMessage'])
+
+
+def jsonBuilder = new groovy.json.JsonBuilder()
+
+jsonBuilder {
+   result(res.collect{[esito: res.esito, exceptionMessage: res.exceptionMessage]})
+}
+return jsonBuilder.toPrettyString()]]></scripting:script>
+            </scripting:transformer>
+            <set-payload value="#[payload]" doc:name="Set Payload" />
+            <logger message="Error get planplont_list: #[payload]" level="ERROR" doc:name="Logger" />
+        </catch-exception-strategy>
+    </flow>
+    <flow name="get:/travel_plan_list:flyNow-config">
+        <logger message="Start get travel plan list #[payload]" level="INFO" doc:name="StartLog"/>
+        
+        <http:request config-ref="HTTP_Request_Configuration" path="/api/x_nttdi_dfn/travelplanutilities/plan_list" method="GET" doc:name="HTTP" />
+        <byte-array-to-object-transformer doc:name="Byte Array to Object" />
+        <scripting:transformer doc:name="Groovy">
+            <scripting:script engine="Groovy"><![CDATA[import groovy.json.JsonSlurper
+import groovy.json.JsonOutput  
+
+class Result {
+    String Plan_id
+    String Name
+  }
+
+
+
+def List<Result> resultList = []
+
+String jsonString = payload;
+JsonSlurper slurper = new JsonSlurper();
+Map parsedJson = slurper.parseText(jsonString);
+def array1 = parsedJson.result;
+for(def member : array1) {
+    
+    Result res = new Result("Plan_id": member.Number, "Name": member.Name)
+    resultList.add(res)
+   }
+
+
+def jsonBuilder = new groovy.json.JsonBuilder()
+
+jsonBuilder {
+   result(resultList.collect{[Plan_id: it.Plan_id, Name: it.Name]})
+}
+return jsonBuilder.toPrettyString()]]></scripting:script>
+        </scripting:transformer>
+        <json:object-to-json-transformer doc:name="Object to JSON" />
+        <set-payload value="#[payload]" doc:name="Set Payload" />
+        <logger message="End get travel plan list #[payload]" level="INFO" doc:name="EndLogger" />
+        <catch-exception-strategy doc:name="Catch Exception Strategy">
+            <expression-component doc:name="Expression"><![CDATA[flowVars.summaryMessage=exception.getSummaryMessage().toString();]]></expression-component>
+            <scripting:transformer doc:name="Groovy">
+                <scripting:script engine="Groovy"><![CDATA[import groovy.json.JsonSlurper
+import groovy.json.JsonOutput  
+
+class Result {
+    String esito
+    String exceptionMessage
+    
+}
+
+
+
+
+Result res = new Result("esito": "KO", "exceptionMessage": flowVars['summaryMessage'])
+
+
+def jsonBuilder = new groovy.json.JsonBuilder()
+
+jsonBuilder {
+   result(res.collect{[esito: res.esito, exceptionMessage: res.exceptionMessage]})
+}
+return jsonBuilder.toPrettyString()]]></scripting:script>
+            </scripting:transformer>
+            <set-payload value="#[payload]" doc:name="Set Payload" />
+            <logger message="Error flusso getTravel_plan_list#[payload]" level="ERROR" doc:name="Logger" />
+        </catch-exception-strategy>
+    </flow>
+    <flow name="post:/accelerometroRequest:flyNow-config">
+ <logger message="start post sendRequest accelerometro #[message.payloadAs(String)]" level="INFO" doc:name="LoggerStart" />
+        
+        <http:request config-ref="HTTP_Request_Accelerometro" path="/api/now/table/u_bslab_ball_sample" method="POST" doc:name="HTTP">
+            <http:request-builder>
+                <http:header headerName="Content-Type" value="application/json"/>
+
+            </http:request-builder>
+        </http:request>
+        <set-payload value="#[payload]" doc:name="Set Payload" mimeType="application/json"/>
+        <logger message="end post sendRequest accelerometro #[message.payloadAs(String)]" level="INFO" doc:name="EndLogger" />    	     <catch-exception-strategy doc:name="Catch Exception Strategy">
+            <expression-component doc:name="Expression"><![CDATA[flowVars.summaryMessage=exception.getSummaryMessage().toString();]]></expression-component>
+            <scripting:transformer doc:name="Groovy">
+                <scripting:script engine="Groovy"><![CDATA[import groovy.json.JsonSlurper
+import groovy.json.JsonOutput  
+
+class Result {
+    String esito
+    String exceptionMessage
+    
+}
+
+
+
+
+Result res = new Result("esito": "KO", "exceptionMessage": flowVars['summaryMessage'])
+
+
+def jsonBuilder = new groovy.json.JsonBuilder()
+
+jsonBuilder {
+   result(res.collect{[esito: res.esito, exceptionMessage: res.exceptionMessage]})
+}
+return jsonBuilder.toPrettyString()]]></scripting:script>
+            </scripting:transformer>
+            <set-payload value="#[payload]" doc:name="Set Payload" />
+            <logger message="Error flusso accelerometro: #[payload]" level="ERROR" doc:name="Logger" />
+        </catch-exception-strategy>
+    </flow>
+    <apikit:mapping-exception-strategy name="flyNow-apiKitGlobalExceptionMapping">
+        <apikit:mapping statusCode="404">
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property" />
+            <set-payload value="{ &quot;message&quot;: &quot;Resource not found&quot; }" doc:name="Set Payload" />
+        </apikit:mapping>
+        <apikit:mapping statusCode="405">
+            <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property" />
+            <set-payload value="{ &quot;message&quot;: &quot;Method not allowed&quot; }" doc:name="Set Payload" />
+        </apikit:mapping>
+        <apikit:mapping statusCode="415">
+            <apikit:exception value="org.mule.module.apikit.exception.UnsupportedMediaTypeException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property" />
+            <set-payload value="{ &quot;message&quot;: &quot;Unsupported media type&quot; }" doc:name="Set Payload" />
+        </apikit:mapping>
+        <apikit:mapping statusCode="406">
+            <apikit:exception value="org.mule.module.apikit.exception.NotAcceptableException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property" />
+            <set-payload value="{ &quot;message&quot;: &quot;Not acceptable&quot; }" doc:name="Set Payload" />
+        </apikit:mapping>
+        <apikit:mapping statusCode="400">
+            <apikit:exception value="org.mule.module.apikit.exception.BadRequestException" />
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property" />
+            <set-payload value="{ &quot;message&quot;: &quot;Bad request&quot; }" doc:name="Set Payload" />
+        </apikit:mapping>
+    </apikit:mapping-exception-strategy>
+</mule>
