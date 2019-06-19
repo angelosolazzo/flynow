@@ -27,7 +27,7 @@ http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mul
     <http:request-config name="HTTP_Request_Configuration" protocol="HTTPS" host="nttdatademo2.service-now.com" port="443" doc:name="HTTP Request Configuration">
         <http:ntlm-authentication username="fndroneuser" password="fndroneuser" />
     </http:request-config>
-    <http:request-config name="HTTP_Request_Accelerometro" protocol="HTTPS" host="dev54786.service-now.com" port="443"  doc:name="HTTP Request Configuration">
+    <http:request-config name="HTTP_Request_Accelerometro" protocol="HTTPS" host="nttdatademo2.service-now.com" port="443"  doc:name="HTTP Request Configuration">
         <http:ntlm-authentication username="BSLABUser" password="BSLABUser"/>
     </http:request-config>
     <flow name="flyNow-main">
@@ -237,7 +237,7 @@ return jsonBuilder.toPrettyString()]]></scripting:script>
     <flow name="post:/accelerometroRequest:flyNow-config">
  <logger message="start post sendRequest accelerometro #[message.payloadAs(String)]" level="INFO" doc:name="LoggerStart" />
         
-        <http:request config-ref="HTTP_Request_Accelerometro" path="/api/now/table/u_bslab_ball_sample" method="POST" doc:name="HTTP">
+        <http:request config-ref="HTTP_Request_Accelerometro" path="/api/now/table/x_nttdi_bslab_ball_sample" method="POST" doc:name="HTTP">
             <http:request-builder>
                 <http:header headerName="Content-Type" value="application/json"/>
 
